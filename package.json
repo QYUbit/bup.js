@@ -1,0 +1,25 @@
+{
+  "name": "supjs",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "npx tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QYUbit/sup.js.git"
+  },
+  "author": "QYUbit",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/QYUbit/sup.js/issues"
+  },
+  "homepage": "https://github.com/QYUbit/sup.js#readme",
+  "type": "module",
+  "description": "Simple UI Pattern",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
