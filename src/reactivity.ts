@@ -11,9 +11,6 @@ interface Effect {
 
 let currentEffect: Effect | null = null;
 
-/**
- * Creates a reactive signal
- */
 export function signal<T>(initialValue: T): [() => T, (value: T | ((prev: T) => T)) => void] {
     const signal: Signal<T> = {
         value: initialValue,
@@ -43,9 +40,6 @@ export function signal<T>(initialValue: T): [() => T, (value: T | ((prev: T) => 
     return [getter, setter] as const;
 }
 
-/**
- * Creates a computed signal
- */
 export function computed<T>(fn: () => T): () => T {
     const [getter, setter] = signal(undefined as T);
     
@@ -56,9 +50,6 @@ export function computed<T>(fn: () => T): () => T {
     return getter;
 }
 
-/**
- * Creates a side effect that automatically tracks dependencies
- */
 export function effect(fn: () => void | (() => void)): () => void {
     const effect: Effect = {
         run: () => {
@@ -96,9 +87,6 @@ export function effect(fn: () => void | (() => void)): () => void {
     };
 }
 
-/**
- * Pattern for async data fetching
- */
 export function resource<T>(
     fetcher: () => Promise<T>
 ): [() => T | undefined, () => boolean, () => Error | undefined] {

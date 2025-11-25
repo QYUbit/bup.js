@@ -1,5 +1,5 @@
 {
-  "name": "supjs",
+  "name": "bup.js",
   "version": "1.0.0",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -9,16 +9,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/QYUbit/sup.js.git"
+    "url": "git+https://github.com/QYUbit/bup.js.git"
   },
   "author": "QYUbit",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/QYUbit/sup.js/issues"
+    "url": "https://github.com/QYUbit/bup.js/issues"
   },
-  "homepage": "https://github.com/QYUbit/sup.js#readme",
+  "homepage": "https://github.com/QYUbit/bup.js#readme",
   "type": "module",
-  "description": "Simple UI Pattern",
+  "description": "Bare UI Pattern",
   "devDependencies": {
     "typescript": "^5.9.3"
   }
