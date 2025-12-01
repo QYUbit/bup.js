@@ -1,7 +1,5 @@
 import { effect } from "./reactivity.js";
 
-export type Getter<T> = T | (() => T);
-
 interface ShowElement extends HTMLElement {
     _shouldShow?: boolean
 }
@@ -16,63 +14,122 @@ interface StyleElement extends HTMLElement {
     _bupStyles?: Record<string, string>
 }
 
-export function create(tagName: string, attributes: Record<string, string> = {}): HTMLElement {
+export function create<K extends keyof HTMLElementTagNameMap>(
+    tagName: K, attributes: Record<string, string> = {}
+): ElementSet {
     const element = document.createElement(tagName);
     for (const name in attributes) {
         element.setAttribute(name, attributes[name] as string);
     }
-    return element;
+    return new ElementSet([element]);
 }
 
-export function query(selector: string) {
-    const el = document.querySelector(selector);
+export function html(strings: TemplateStringsArray, ...values: any[]): ElementSet {
+    const template = document.createElement('template');
+    template.innerHTML = strings.reduce((acc, str, i) => 
+        acc + str + (values[i] ?? ''), ''
+    );
+    const el = template.content.firstElementChild as HTMLElement;
     return new ElementSet(el ? [el] : []);
 }
 
-export function queryAll(selector: string) {
+export function query(selector: string): ElementSet | null {
+    const el = document.querySelector(selector);
+    if (!(el instanceof HTMLElement)) return null;
+    return new ElementSet(el ? [el] : []);
+}
+
+export function queryAll(selector: string): ElementSet {
     const els = document.querySelectorAll(selector);
-    return new ElementSet(Array.from(els));
+    return new ElementSet(Array.from(els).filter(el => el instanceof HTMLElement) as HTMLElement[]);
 }
 
 export class ElementSet {
-    private elements: Element[];
+    private elements: HTMLElement[];
     private cleanups: (() => void)[];
 
-    constructor(elements: Element[]) {
+    constructor(elements: HTMLElement[]) {
         this.elements = elements;
         this.cleanups = [];
     }
 
-    text(getter: Getter<any>): ElementSet {
+    setText(text: any): this {
+        for (const element of this.elements) {
+            element.textContent = String(text);
+        }
+        return this;
+    }
+
+    setAttr(attributeName: string, value: any): this {
+        for (const element of this.elements) {
+            element.setAttribute(attributeName, String(value));
+        }
+        return this;
+    }
+
+    addClass(...classNames: string[]): this {
+        for (const element of this.elements) {
+            element.classList.add(...classNames);
+        }
+        return this;
+    }
+
+    removeClass(...classNames: string[]): this {
+        for (const element of this.elements) {
+            element.classList.remove(...classNames);
+        }
+        return this;
+    }
+
+    toggleClass(className: string): this {
+        for (const element of this.elements) {
+            if (element.classList.contains(className)) {
+                element.classList.remove(className);
+            } else {
+                element.classList.add(className);
+            }
+        }
+        return this;
+    }
+
+    setStyle(styles: Record<string, string>): this {
+        for (const element of this.elements) {
+            for (const [property, value] of Object.entries(styles))
+            element.style.setProperty(property, value);
+        }
+        return this;
+    }
+
+    $text(getter: () => any): this {
         for (const element of this.elements) {
             const cleanup = effect(() => {
-                element.textContent = String(typeof getter === "function" ? getter() : getter);
+                element.textContent = String(getter());
             });
             this.cleanups.push(cleanup);
         }
         return this;
     }
 
-    attr(attributeName: string, getter: Getter<any>): ElementSet {
+    $attr(attributeName: string, getter: () => any): this {
         for (const element of this.elements) {
             const cleanup = effect(() => {
-                element.setAttribute(attributeName, String(typeof getter === "function" ? getter() : getter));
+                element.setAttribute(attributeName, String(getter()));
             });
             this.cleanups.push(cleanup);
         }
         return this;
     }
 
-    show(getter: Getter<boolean>): ElementSet {
+    $show(getter: () => boolean): this {
         for (const element of this.elements) {
             const cleanup = effect(() => {
-                const shouldShow = typeof getter === "function" ? getter() : getter;
+                const shouldShow = getter();
 
                 if ((element as ShowElement)._shouldShow === shouldShow) return;
                 (element as ShowElement)._shouldShow = shouldShow;
 
-                if ((element as HTMLElement).style) {
-                    (element as HTMLElement).style.display = shouldShow ? "" : "none";
+                if (element.style) {
+                    element.style.display = shouldShow ? "" : "none";
                 }
             });
             this.cleanups.push(cleanup);
@@ -80,9 +137,9 @@ export class ElementSet {
         return this;
     }
 
-    class(
-        getter: Record<string, Getter<boolean>> | Getter<string[]> | Getter<string>
-    ): ElementSet {
+    $class(
+        getter: Record<string, () => boolean> | (() => string[]) | (() => string)
+    ): this {
         for (const element of this.elements) {
 
             if (!(element as ClassElement)._originalClasses) {
@@ -107,8 +164,7 @@ export class ElementSet {
                     });
                 } else if (typeof classes === "object" && classes !== null) {
                     Object.entries(classes).forEach(([className, condition]) => {
-                        if (typeof condition === "function") condition = condition();
-                        if (condition) {
+                        if (condition()) {
                             className.split(/\s+/).forEach((cls) => {
                                 if (cls.trim()) newClasses.add(cls.trim());
                             })
@@ -124,7 +180,7 @@ export class ElementSet {
         return this;
     }
 
-    style(getter: Record<string, Getter<string>> | Getter<string>): ElementSet {
+    $style(getter: Record<string, (() => string)> | (() => string)): this {
         for (const element of this.elements) {
 
             if (!(element as StyleElement)._originalStyle) {
@@ -134,7 +190,7 @@ export class ElementSet {
             const cleanup = effect(() => {                
                 if ((element as StyleElement)._bupStyles) {
                     Object.keys((element as StyleElement)._bupStyles!).forEach((prop) => {
-                        (element as HTMLElement).style?.removeProperty(prop);
+                        element.style?.removeProperty(prop);
                     });
                 }
                 
@@ -145,13 +201,11 @@ export class ElementSet {
                 }
                 
                 const newStyles: Record<string, string> = {}
-                
-                if (typeof getter === "function") {
-                    getter = getter();
-                }
 
-                if (typeof getter === "string") {
-                    const cssString = getter.trim();
+                const dynamicStyles = typeof getter === "function" ? getter() : getter;
+               
+                if (typeof dynamicStyles === "string") {
+                    const cssString = dynamicStyles.trim();
                     if (cssString) {
                         const currentStyle = element.getAttribute("style") || "";
                         const separator = currentStyle && !currentStyle.endsWith(";") ? "; " : "";
@@ -173,9 +227,9 @@ export class ElementSet {
                     }
                 } else if (typeof getter === "object" && getter !== null) {
                     Object.entries(getter).forEach(([property, styleValue]) => {
-                        const finalValue = typeof styleValue === "function" ? styleValue() : styleValue;
+                        const finalValue = styleValue();
                         const cssProperty = property.replace(/([A-Z])/g, "-$1").toLowerCase();
-                        (element as HTMLElement).style?.setProperty(cssProperty, String(finalValue));
+                        element.style?.setProperty(cssProperty, String(finalValue));
                         newStyles[cssProperty] = String(finalValue);
                     });
                 }
@@ -188,33 +242,23 @@ export class ElementSet {
         return this;
     }
 
-    on(eventName: string, cb: EventListenerOrEventListenerObject): ElementSet {
+    $children<T>(
+        getter: T[] |(() => T[]),
+        render: (element: HTMLElement, value: T, index: number) => (() => void) | void
+    ): this {
         for (const element of this.elements) {
-            element.addEventListener(eventName, cb);
-            this.cleanups.push(() => element.removeEventListener(eventName, cb));
-        }
-        return this;
-    }
-
-    children<T>(
-        getter: Getter<T[]>,
-        render: (element: Element, value: T, index: number) => (() => void) | void
-    ) {
-        for (const element of this.elements) {
-            let prevCleanups: (() => void)[] = []
+            let prevCleanups = new Set<() => void>();
 
             const cleanup = effect(() => {
                 prevCleanups.forEach(fn => fn());
-                prevCleanups = [];
-
-                element.innerHTML = "";
+                prevCleanups.clear();
 
                 const arr = typeof getter === "function" ? getter() : getter;
 
                 arr.forEach((value, i) => {
                     const _cleanup = render(element, value, i);
                     if (_cleanup) {
-                        prevCleanups.push(_cleanup);
+                        prevCleanups.add(_cleanup);
                     }
                 });
             });
@@ -227,12 +271,97 @@ export class ElementSet {
         return this;
     }
 
-    forEach(cb: (value: Element, index: number, array: Element[]) => void): ElementSet {
+    $keyedChildren<T>(
+        getter: T[] |(() => T[]),
+        key: (value: T, index: number) => string,
+        render: (element: HTMLElement, value: T, index: number) => (() => void) | void
+    ): this {
+        for (const element of this.elements) {
+            const cleanups = new Map<string, (() => void)>();
+
+            const cleanup = effect(() => {
+                const arr = typeof getter === "function" ? getter() : getter;
+
+                const keys = arr.map((value, i) => key(value, i));
+
+                const prevKeys = Array.from(cleanups.keys());
+
+                const keysToRemove = prevKeys.filter(key => !keys.includes(key));
+
+                keysToRemove.forEach((key) => {
+                    const fn = cleanups.get(key);
+                    fn && fn();
+                    cleanups.delete(key);
+                });
+
+                keys.forEach((key, i) => {
+                    if (cleanups.has(key)) return;
+                    const cleanup = render(element, arr[i] as T, i);
+                    cleanups.set(key, cleanup ?? (() => {}));
+                });
+            });
+
+            this.cleanups.push(() => {
+                cleanup();
+                cleanups.forEach(fn => fn());
+            });
+        }
+        return this;
+    }
+
+    on<K extends keyof HTMLElementEventMap>(
+        eventName: K,
+        cb: (e: HTMLElementEventMap[K]) => void
+    ): this {
+        for (const element of this.elements) {
+            element.addEventListener(eventName, cb);
+            this.cleanups.push(() => element.removeEventListener(eventName, cb));
+        }
+        return this;
+    }
+
+    find(selector: string): ElementSet {
+        const found = this.elements.flatMap(el => 
+            Array.from(el.querySelectorAll(selector))
+        );
+        return new ElementSet(found as HTMLElement[]);
+    }
+
+    parent(): ElementSet {
+        const parents = this.elements
+            .map(el => el.parentElement)
+            .filter((el): el is HTMLElement => el !== null);
+        return new ElementSet(parents);
+    }
+
+    append(...children: (ElementSet | HTMLElement)[]): this {
+        for (const element of this.elements) {
+            children.forEach(child => {
+                if (child instanceof ElementSet) {
+                    child.all.forEach(c => element.appendChild(c));
+                } else {
+                    element.appendChild(child);
+                }
+            });
+        }
+        return this;
+    }
+
+
+    map<T>(cb: (element: HTMLElement, index: number) => T): T[] {
+        return this.elements.map(cb);
+    }
+
+    filter(cb: (element: HTMLElement, index: number) => boolean): ElementSet {
+        return new ElementSet(this.elements.filter(cb));
+    }
+
+    forEach(cb: (value: HTMLElement, index: number, array: HTMLElement[]) => void): this {
         this.elements.forEach(cb);
         return this;
     }
 
-    do(cb: (element: Element | undefined) => void): ElementSet {
+    forOne(cb: (element: HTMLElement | undefined) => void): this {
         cb(this.elements[0]);
         return this;
     }
@@ -251,5 +380,9 @@ export class ElementSet {
 
     get length(): number {
         return this.elements.length;
+    }
+
+    isEmpty(): boolean {
+        return this.elements.length === 0;
     }
 }

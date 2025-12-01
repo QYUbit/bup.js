@@ -1,6 +1,6 @@
 {
   "name": "bup.js",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/QYUbit/bup.js#readme",
   "type": "module",
-  "description": "Bare UI Pattern",
+  "description": "Bare UI Patterns",
   "devDependencies": {
     "typescript": "^5.9.3"
   }

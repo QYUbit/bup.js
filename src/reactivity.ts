@@ -87,61 +87,41 @@ export function effect(fn: () => void | (() => void)): () => void {
     };
 }
 
-export function resource<T>(
-    fetcher: () => Promise<T>
-): [() => T | undefined, () => boolean, () => Error | undefined] {
-    const [data, setData] = signal<T | undefined>(undefined);
-    const [loading, setLoading] = signal(true);
-    const [error, setError] = signal<Error | undefined>(undefined);
+export function ignore<T>(fn: () => T): T {
+    const prevEffect = currentEffect;
+    currentEffect = null;
     
-    effect(() => {
-        setLoading(true);
-        setError(undefined);
-        
-        fetcher()
-        .then((result) => {
-            setData(result);
-            setLoading(false);
-        })
-        .catch((err) => {
-            setError(err);
-            setLoading(false);
-        });
-    });
-    
-    return [data, loading, error];
+    try {
+        return fn();
+    } finally {
+        currentEffect = prevEffect;
+    }
 }
 
-export function store<T>(
-    defaultValue: T,
-    key: string,
-    storage: "localStorage" | "sessionStorage" = "localStorage"
-) {
-    const store =
-    storage === "sessionStorage"
-        ? window.sessionStorage
-        : window.localStorage;
-
-    const raw = store.getItem(key);
-
-    let initialValue: T;
-    if (raw === null) {
-        initialValue = defaultValue;
-    } else {
-        try {
-            initialValue = JSON.parse(raw) as T;
-        } catch {
-            initialValue = raw as unknown as T;
+export function scope<T>(fn: (dispose: () => void) => T): T {
+    const prevEffect = currentEffect;
+    currentEffect = null;
+    
+    const cleanups: (() => void)[] = [];
+    
+    const dispose = () => {
+        cleanups.forEach(cleanup => cleanup());
+        cleanups.length = 0;
+    };
+    
+    try {
+        const result = fn(dispose);
+        
+        if (currentEffect) {
+            cleanups.push(() => {
+                currentEffect?.cleanups.forEach(cleanup => cleanup());
+            });
         }
+        
+        return result;
+    } finally {
+        currentEffect = prevEffect;
     }
-
-    const [getter, setter] = signal<T>(initialValue);
-
-    effect(() => {
-        store.setItem(key, JSON.stringify(getter()));
-    });
-
-    return [getter, setter] as const;
 }
 
 let flushing = false;

@@ -5,7 +5,7 @@ A lightweight, reactive library for building dynamic UIs with fine-grained react
 ## Installation
 
 ```bash
-npm bup.js
+npm install bup.js
 ```
 
 ## Example
@@ -114,7 +114,7 @@ query('ul').children(
   () => todos(),
   (parent, todo) => {
     const div = create('div');
-    div.textContent = todo.text;
+    div.setText(todo.text);
     parent.appendChild(div);
   }
 );
